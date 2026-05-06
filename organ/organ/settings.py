@@ -55,7 +55,7 @@ DOWNLOADER_MIDDLEWARES = {
     'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': 900,
 }
 
-BASE_DIR = Path.home() / "Python" / "file_processor" / "data" / "raw"
+BASE_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 FEED_EXPORTERS = {'parquet': 'organ.exporters.ParquetItemExporter'}
@@ -68,4 +68,4 @@ FEEDS = {
 }  # COMPRESS TO SNAPPY, SEE EXPORTERS FILE TO CHANGE COMPRESSION MANAGEMENT
 FEED_EXPORT_BATCH_ITEM_COUNT = 5000
 
-LOG_ENABLED = False
+LOG_ENABLED = True

@@ -1,7 +1,9 @@
 from scrapy import Item, Field
 
 class OrganItem(Item):
-    article_id = Field()
-    title = Field()
-    author = Field()
-    text = Field()
+    url          = Field()
+    title        = Field()
+    author       = Field()
+    published_at = Field()
+    tags         = Field()
+    body         = Field()

@@ -6,9 +6,6 @@ from scrapy import signals
 class AnarchySpider(scrapy.Spider):
     name = "anarchy"  
     start_urls = [f"https://theanarchistlibrary.org/latest/"]                
-    def __init__(self):
-        self.item_id_counter = 0
-        self.page_num = 1
     
     @classmethod
     def from_crawler(cls, crawler, *args, **kwargs):
@@ -25,22 +22,31 @@ class AnarchySpider(scrapy.Spider):
         self.logger.info(f"Spider finished in {elapsed:.2f} seconds. Reason: {reason}")
    
     def parse(self, response):
-        links = response.css('a.list-group-item.clearfix::attr(href)').getall()
-        for link in links:
-            yield response.follow(link, callback=self.final_content)
+        entries = response.css('div.amw-listing-item').get()
+        for entry in entries:
+            link = entry.css('a::attr(href)').get()
+            link_date = entry.css('span.pull-right.clearfix.amw-list-text-pubdate-locale ::text').get()
             
-        next_page = f'{self.start_urls[0]}{self.page_num}'
-        if next_page and links:
-        #if self.page_num < 2 and next_page:
-            self.page_num += 1
-            yield response.follow(next_page, callback=self.parse)
+            if not link:
+                continue
             
-    def final_content(self, response): 
+            yield response.follow(
+                link, 
+                callback=self.final_content, 
+                cb_kwargs={'listing_date': link_date}
+            )   
+        
+        next_href = response.css('ul.pagination li.active + li a::attr(href)').get()
+        if next_href:
+            yield response.follow(next_href, callback=self.parse)
+            
+    def final_content(self, response, listing_date=None): 
         articles = OrganItem()
-        self.item_id_counter += 1 
-        articles['article_id'] = self.item_id_counter 
-        articles['author'] = response.css('h3#text-author ::text').get()
+        articles['url'] = response.url
         articles['title'] = response.css('title ::text').get()
-        articles['text'] = ''.join(response.css('div#thework ::text').getall())
-        #articles['text'] = ''.join([value.replace("\n", " ") for value in response.css('div#thework ::text').getall()])
+        articles['author'] = response.css('h3#text-author ::text').get()
+        articles['published_at'] = listing_date
+        articles['tags'] = response.css('a.text-topics-item ::text').get()
+        articles['body'] = ''.join(response.css('div#thework ::text').getall())
+    
         yield articles
