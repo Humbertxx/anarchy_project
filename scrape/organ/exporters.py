@@ -15,4 +15,4 @@ class ParquetItemExporter(BaseItemExporter):
         if not self.items:
             return
         table = pa.Table.from_pylist(self.items)
-        pq.write_table(table, self.file, compression="snappy")
+        pq.write_table(table, self.file)

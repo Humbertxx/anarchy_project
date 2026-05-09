@@ -55,17 +55,19 @@ DOWNLOADER_MIDDLEWARES = {
     'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': 900,
 }
 
-BASE_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
-BASE_DIR.mkdir(parents=True, exist_ok=True)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = PROJECT_ROOT / "data" / "raw"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 FEED_EXPORTERS = {'parquet': 'organ.exporters.ParquetItemExporter'}
 
 FEEDS = {
-    str(BASE_DIR / "shard_%(batch_id)05d.pq"): {
+    str(DATA_DIR / "shard_%(batch_id)05d.pq"): {
         "format": "parquet",
         "overwrite": True,
     }
 }  # COMPRESS TO SNAPPY, SEE EXPORTERS FILE TO CHANGE COMPRESSION MANAGEMENT
-FEED_EXPORT_BATCH_ITEM_COUNT = 5000
+FEED_EXPORT_BATCH_ITEM_COUNT = 2500
 
 LOG_ENABLED = True
+LOG_LEVEL = 'DEBUG'
