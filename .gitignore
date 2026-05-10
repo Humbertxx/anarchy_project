@@ -1,4 +1,16 @@
 /.venv
 /.vscode
 README.md
+READMEv2.md
 data/
+.env/
+.env
+*.env/
+*.pyc
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+.idea/
+*.log
+!env.example
+
