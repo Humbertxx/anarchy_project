@@ -1,7 +1,9 @@
 /.venv
 /.vscode
-README.md
+READMEv1.md
 READMEv2.md
+ReADMEv3.md
+
 data/
 .env/
 .env
