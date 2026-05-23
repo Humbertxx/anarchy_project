@@ -10,15 +10,15 @@ class Tag(Base):
     id:   Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(unique=True)
 
-class Sentence(Base):
-    __tablename__ = "sentences"
+class Chunk(Base):
+    __tablename__ = "chunk"
     id:         Mapped[int] = mapped_column(primary_key=True)
     article_id: Mapped[int] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"))
     position:   Mapped[int | None]
     text:       Mapped[str | None]
     embedding:  Mapped[list[float] | None]
 
-    article: Mapped[Article] = relationship(back_populates="sentences")
+    article: Mapped[Article] = relationship(back_populates="chunk")
 
 class ToneScore(Base):
     __tablename__ = "tone_scores"

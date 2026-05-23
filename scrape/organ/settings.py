@@ -1,4 +1,5 @@
-from pathlib import Path
+from config import RAW_DIR
+
 BOT_NAME = "organ"
 SPIDER_MODULES = ["organ.spiders"]
 NEWSPIDER_MODULE = "organ.spiders"
@@ -55,14 +56,10 @@ DOWNLOADER_MIDDLEWARES = {
     'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': 900,
 }
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data" / "raw"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
 FEED_EXPORTERS = {'parquet': 'organ.exporters.ParquetItemExporter'}
 
 FEEDS = {
-    str(DATA_DIR / "shard_%(batch_id)05d.pq"): {
+    str(RAW_DIR / "shard_%(batch_id)05d.pq"): {
         "format": "parquet",
         "overwrite": True,
     }

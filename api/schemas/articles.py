@@ -30,8 +30,7 @@ class ArticleListItem(BaseModel):
 
 class ArticleDetail(ArticleListItem):
     body: str | None = None
-    umap_x: float | None = None
-    umap_y: float | None = None
+    secondary_topics: float | None = None
     created_at: datetime
     topic: TopicRef | None = None
-    sentences: list[SentenceOut] = []
+    chunk: list[SentenceOut] = []

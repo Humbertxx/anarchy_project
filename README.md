@@ -463,7 +463,7 @@ Analysts don't touch the API at all. They connect directly to PostgreSQL using t
 
 - `topic_summary` — per-topic size, dominant tone, and average tone scores
 - `tag_frequency` — most common human tags across the corpus
-- `topics_over_time` — topic prevalence by publication period (BERTopic dynamic topic modeling output)
+- `topics_over_time` — topic prevalence by publication period (BERTopic dynamic topic modeling output), important to note that this is based on publication date on the Anarchy Library, not article release date in the real world, which may differ significantly for older works. 
 - `articles_flat` — denormalized article + topic + top-tags + tone for easy filtering
 
 For analysts working offline or sharing dashboards, the same data is exported as CSV and Parquet to the `exports/` folder by `pipeline/export.py`.

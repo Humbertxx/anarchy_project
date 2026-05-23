@@ -1,7 +1,6 @@
 from sentence_transformers import CrossEncoder
 import spacy
 from processingFile import sql_processing
-from config import DATA_DIR
 from collections import defaultdict
 
 model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L6-v2")
@@ -9,7 +8,7 @@ model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L6-v2")
 sentence_tokenizer = spacy.load("en_core_web_sm")
 
 def main():
-    rows = sql_processing(DATA_DIR)
+    rows = sql_processing()
     rows = group_chunk(rows)
         
     for _, txt_list in rows.items():

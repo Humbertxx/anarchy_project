@@ -1,22 +1,77 @@
-from processingFile import sql_processing
 from bertopic import BERTopic
+
+from cuml.manifold import UMAP        # GPU-accelerated
+from cuml.cluster import HDBSCAN      # GPU-accelerated
+
+
+
+
 from sentence_transformers import SentenceTransformer
+from sklearn.decomposition import PCA
+
 from sklearn.feature_extraction.text import CountVectorizer
 from collections import defaultdict
 
-topic_model = BERTopic(verbose=True)
-model = SentenceTransformer("all-MiniLM-L6-v2")
+import numpy as np
+import pandas as pd
+
+
+from config import ensure_dirs, TOPIC_VERBOSE, SENTENCE_MODEL, TOPIC_NGRAM_RANGE, TOPIC_MIN_DF
+
+topic_model = BERTopic(verbose=TOPIC_VERBOSE)
+model = SentenceTransformer(SENTENCE_MODEL)
 doc_topic_count = defaultdict(lambda: defaultdict(int))
 
+# remember to get this from config.py
 
-## gather from processing in sql all texts and their ids
-def get_topics(file_dir):    
-    txt = sql_processing(file_dir)
-    #txt = group_chunk(rows)
-    embedded = model.encode(txt, show_progress_bar=True)
-    topics, probs = topic_model.fit_transform(txt, embedded)
+
+def main():
+    ensure_dirs()
     
-    vectorizer_model = CountVectorizer(stop_words="english", ngram_range=(1, 3), min_df=10)
-    topic_model.update_topics(txt, vectorizer_model=vectorizer_model)
     
-    return topics, probs
+
+
+
+def data_count_to_use():
+    pd.read_parquet("shard_00001.pq")
+
+def fit_reduce_doc_embeddings(doc_embeddings: pd.DataFrame, n_components: int = 50):
+    pca = PCA(n_components=n_components)
+    reduced = pca.fit_transform(doc_embeddings)
+    return reduced, pca
+
+
+def doc_embedding_fitting(doc_embeddings: pd.DataFrame): 
+# Pre-reduce 384d → 50d to speed up UMAP further
+    doc_embeddings_reduced = fit_reduce_doc_embeddings(doc_embeddings)[0]
+
+    umap_model    = UMAP(n_components=5, n_neighbors=15, min_dist=0.0, metric="cosine")
+    hdbscan_model = HDBSCAN(min_cluster_size=50, metric="euclidean",
+                        cluster_selection_method="eom", prediction_data=True)
+    
+    vectorizer    = CountVectorizer(stop_words="english", ngram_range=TOPIC_NGRAM_RANGE, min_df=TOPIC_MIN_DF)
+
+    topic_model = BERTopic(
+        embedding_model=None,           # passing pre-computed embeddings
+        umap_model=umap_model,
+        hdbscan_model=hdbscan_model,
+        vectorizer_model=vectorizer,
+        calculate_probabilities=True,
+        low_memory=True,
+        verbose=True,
+    )
+    topics, probs = topic_model.fit_transform(article_summaries, doc_embeddings_reduced)
+    topic_model.save("data/topic/model", serialization="safetensors")
+
+
+# Load chunk embeddings and group by article
+def document_topic_modeling():
+    con
+    chunks_df = pd.read_parquet("data/embeddings/")
+    doc_embeddings = (
+        chunks_df.groupby("article_id")["embedding"]
+        .apply(lambda vecs: np.mean(np.stack(vecs), axis=0))
+    )
+    return doc_embeddings
+# Result: 45K × 384 array (one embedding per article)
+

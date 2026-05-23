@@ -1,12 +1,12 @@
 from .articles import Article
-from .quote import Tag, Sentence, ToneScore
+from .quote import Tag, Chunk, ToneScore
 from .topics import Topic
 
 
 __all__ = [
     "Article",
     "Tag",
-    "Sentence",
+    "Chunk",
     "ToneScore",
     "Topic",
 ]
