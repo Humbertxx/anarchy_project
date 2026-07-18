@@ -44,8 +44,9 @@ class AnarchySpider(scrapy.Spider):
         
         next_page = f'{self.start_urls[0]}{self.page_num}'
         if next_page and entries:
-            self.page_num += 1
-            yield response.follow(next_page, callback=self.parse)
+            if self.page_num < 5:
+                self.page_num += 1
+                yield response.follow(next_page, callback=self.parse)
             
     def final_content(self, response, listing_date=""): 
         self.item_id_counter += 1 

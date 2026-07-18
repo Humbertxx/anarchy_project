@@ -1,8 +1,10 @@
-from config import RAW_DIR
+from config import RAW_DIR, ensure_dirs
+
+ensure_dirs()
 
 BOT_NAME = "organ"
-SPIDER_MODULES = ["organ.spiders"]
-NEWSPIDER_MODULE = "organ.spiders"
+SPIDER_MODULES = ["scrape.organ.spiders"]
+NEWSPIDER_MODULE = "scrape.organ.spiders"
 
 ADDONS = {}
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
@@ -26,7 +28,7 @@ CONCURRENT_REQUESTS_PER_IP = 256
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-    "organ.pipelines.OrganPipeline": 300,
+    "scrape.organ.pipelines.OrganPipeline": 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
@@ -56,15 +58,16 @@ DOWNLOADER_MIDDLEWARES = {
     'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': 900,
 }
 
-FEED_EXPORTERS = {'parquet': 'organ.exporters.ParquetItemExporter'}
+FEED_EXPORTERS = {'parquet': 'scrape.organ.exporters.ParquetItemExporter'}
 
 FEEDS = {
     str(RAW_DIR / "shard_%(batch_id)05d.pq"): {
         "format": "parquet",
         "overwrite": True,
     }
-}  # COMPRESS TO SNAPPY, SEE EXPORTERS FILE TO CHANGE COMPRESSION MANAGEMENT
+} 
 FEED_EXPORT_BATCH_ITEM_COUNT = 2500
 
 LOG_ENABLED = True
 LOG_LEVEL = 'DEBUG'
+TELNETCONSOLE_ENABLED = False
