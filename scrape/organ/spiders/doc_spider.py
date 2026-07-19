@@ -29,9 +29,7 @@ class AnarchySpider(scrapy.Spider):
         entries = response.css("div.amw-listing-item")
         for entry in entries:
             link = entry.css("a::attr(href)").get()
-            link_date = entry.css(
-                "span.pull-right.clearfix.amw-list-text-pubdate-locale ::text"
-            ).get()
+           
             
             if not link:
                 continue
@@ -39,7 +37,7 @@ class AnarchySpider(scrapy.Spider):
             yield response.follow(
                 link, 
                 callback=self.final_content, 
-                cb_kwargs={"listing_date": (link_date or "").strip()},
+                #cb_kwargs={"listing_date": (link_date)},
             )   
         
         next_page = f'{self.start_urls[0]}{self.page_num}'
@@ -48,24 +46,17 @@ class AnarchySpider(scrapy.Spider):
                 self.page_num += 1
                 yield response.follow(next_page, callback=self.parse)
             
-    def final_content(self, response, listing_date=""): 
+    def final_content(self, response): 
         self.item_id_counter += 1 
 
         article: OrganItem = {
+            "file_id" : self.item_id_counter,
             "url": response.url,
             "title": (response.css("title::text").get() or "").strip(),
             "author": (response.css("h3#text-author ::text").get() or "").strip(),
-            "published_at": listing_date,
-            "tags": [
-                tag.strip()
-                for tag in response.css("a.text-topics-item ::text").getall()
-                if tag.strip()
-            ],
-            "text": "\n".join(
-                text.strip()
-                for text in response.css("div#thework ::text").getall()
-                if text.strip()
-            ),
+            "published_at": "".join([p_date.strip() for p_date in response.css("div#textdate::text").getall() if p_date.strip()]),
+            "tags": [tag.strip() for tag in response.css("a.text-topics-item ::text").getall() if tag.strip()],
+            "text": "\n".join(text.strip() for text in response.css("div#thework ::text").getall() if text.strip()),
         }
 
         yield article

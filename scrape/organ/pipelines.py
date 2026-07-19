@@ -9,7 +9,7 @@ class OrganPipeline:
         item["published_at"] = self.normalize_date(item.get("published_at"))
         return item
     
-    def normalize_text(self, text: str | None) -> str:
+    def normalize_text(self, text: str) -> str:
         if not text:
             return ""
 
@@ -19,7 +19,7 @@ class OrganPipeline:
         return "\n".join(line.strip() for line in text.split("\n")).strip()
             
     
-    def normalize_date(self, date_value: str | None) -> str: 
+    def normalize_date(self, date_value: str) -> str: 
         if not date_value:
             return ""
 
