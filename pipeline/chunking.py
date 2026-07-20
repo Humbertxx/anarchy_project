@@ -2,6 +2,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import numpy as np
 import pandas as pd
 import duckdb
+from pathlib import Path
 
 ## Text chunk, chunk size, separators, and overlap is define in the chunk, returns a list
 def to_chunks(txt : str) -> list[str]:
@@ -13,40 +14,48 @@ def to_chunks(txt : str) -> list[str]:
         )
     return text_splitter.split_text(text)
 
-# Load chunk embeddings and group by article
-def document_chunks():
-    chunks_df = pd.read_parquet("data/embeddings/")
-    doc_embeddings = (
-        chunks_df.groupby("article_id")["embedding"]
-        .apply(lambda vecs: np.mean(np.stack(vecs), axis=0))
-)
+# SQL processing of files
+def load_parquet_shards(file_dir: Path) -> pd.DataFrame:
+    if not file_dir:
+        raise ValueError("directory of files need to be define")
+    conn = duckdb.connect()
     
-
-## File reading in directory in order for DuckDB being able to read it, creates list of all files in directory
-def load_shard_sql(file_dir):
-    files = list(file_dir.glob("shard_*.pq"))
-    if not files:
-        print(f"no shard found in {file_dir}")
-        return []
-    return files
-
-## SQL processing of files, reads files with DuckDB, chunk text, returns text chunk and id
-def sql_processing(file_dir):
-    files = load_shard_sql(file_dir)
+    sql_query = conn.execute(f"""
+        SELECT *, filename,
+        FROM read_parquet('{file_dir}')
+        WHERE text IS NOT NULL AND text <> 0;
+        """
+        )
     
-    con = duckdb.connect()
-    rows = []
-    for file in files:
-        if files is None:
-            return ''
-        df = con.execute(f"""SELECT * FROM read_parquet('{file}.pq', format='nd')""").df()
-        df["text"] = df["text"].apply(to_chunks)
-        df = df.explode("text", ignore_index=True)
-        df = df.rename(columns={"text": "chunk_text"})
+    return sql_query
     
-        docs = df["chunk_text"].tolist()
-        book_ids = df["title"].tolist()
+## apply to dataframe the function to chunk
+def apply_chunk_processing(sql_query):
+    df = sql_query.df()
+    
+    if df is None:
+        raise ValueError("need to be valid directory")
+    
+    chunks_accumulator = []
+   
+    for row in df.itertuples():
+        temp_chunk = to_chunks(row.text)
+        for idx, chunk in enumerate(temp_chunk):\
+            chunk_row = {
+                "article_id": row.id,
+                "idx": idx,
+                "chunk_text": chunk,
+            }
+    chunks_accumulator.append(chunk_row)
+    chunks_df = pd.DataFrame(chunks_accumulator)
         
-        rows.append((docs, book_ids))
+    return chunks_df
+
+def apply_article_agg(embed_df: pd.DataFrame) -> pd.DataFrame:
+    if not embed_df:
+        raise ValueError("DataFrame of files need to be define")
+
+    doc = embed_df.groupby("article_id")["embedding"].apply(lambda x: np.mean(x.tolist(), axis=0))
     
-    return rows 
+    return doc
+    
