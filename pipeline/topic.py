@@ -4,8 +4,6 @@ from cuml.manifold import UMAP        # GPU-accelerated
 from cuml.cluster import HDBSCAN      # GPU-accelerated
 
 
-
-
 from sentence_transformers import SentenceTransformer
 from sklearn.decomposition import PCA
 
@@ -29,9 +27,6 @@ def main():
     ensure_dirs()
     
     
-
-
-
 def data_count_to_use():
     pd.read_parquet("shard_00001.pq")
 
@@ -46,8 +41,7 @@ def doc_embedding_fitting(doc_embeddings: pd.DataFrame):
     doc_embeddings_reduced = fit_reduce_doc_embeddings(doc_embeddings)[0]
 
     umap_model    = UMAP(n_components=5, n_neighbors=15, min_dist=0.0, metric="cosine")
-    hdbscan_model = HDBSCAN(min_cluster_size=50, metric="euclidean",
-                        cluster_selection_method="eom", prediction_data=True)
+    hdbscan_model = HDBSCAN(min_cluster_size=50, metric="euclidean", cluster_selection_method="eom", prediction_data=True)
     
     vectorizer    = CountVectorizer(stop_words="english", ngram_range=TOPIC_NGRAM_RANGE, min_df=TOPIC_MIN_DF)
 
@@ -62,16 +56,3 @@ def doc_embedding_fitting(doc_embeddings: pd.DataFrame):
     )
     topics, probs = topic_model.fit_transform(article_summaries, doc_embeddings_reduced)
     topic_model.save("data/topic/model", serialization="safetensors")
-
-
-# Load chunk embeddings and group by article
-def document_topic_modeling():
-    con
-    chunks_df = pd.read_parquet("data/embeddings/")
-    doc_embeddings = (
-        chunks_df.groupby("article_id")["embedding"]
-        .apply(lambda vecs: np.mean(np.stack(vecs), axis=0))
-    )
-    return doc_embeddings
-# Result: 45K × 384 array (one embedding per article)
-

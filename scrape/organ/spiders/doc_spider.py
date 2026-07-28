@@ -50,7 +50,7 @@ class AnarchySpider(scrapy.Spider):
         self.item_id_counter += 1 
 
         article: OrganItem = {
-            "file_id" : self.item_id_counter,
+            "article_id" : self.item_id_counter,
             "url": response.url,
             "title": (response.css("title::text").get() or "").strip(),
             "author": (response.css("h3#text-author ::text").get() or "").strip(),

@@ -1,0 +1,28 @@
+[project]
+name = "anarchy_project"
+version = "0.0.4"
+authors = [
+  { name="Humberto Bohorquez", email="humberto.bohorquez03@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "bertopic==0.17.3",
+    "duckdb==1.4.0",
+    "langchain-text-splitters==0.3.11",
+    "pandas==2.3.3",
+    "pyarrow==21.0.0",
+    "scikit-learn==1.7.2",
+    "scrapy==2.13.3",
+    "sentence-transformers==5.1.1",
+    "spacy==3.8.11",
+    "twisted<24.3.0",
+]
+
+
+

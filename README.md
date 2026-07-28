@@ -1,6 +1,6 @@
 # Anarchy Library NLP Project
 ### Version 0.0.4
-> A data science pipeline that scrapes the [Anarchy Library](https://theanarchylibrary.org/) and applies modern NLP — BERT-based topic clustering, Cross-Encoder relevance scoring, and sentiment analysis — to surface the dominant philosophical and rhetorical trends across the corpus.
+> A data science pipeline that scrapes the [Anarchy Library](https://theanarchistlibrary.org/) and applies modern NLP — BERT-based topic clustering, Cross-Encoder relevance scoring, and sentiment analysis — to surface the dominant philosophical and rhetorical trends across the corpus.
 
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Scrapy](https://img.shields.io/badge/scrapy-2.x-green.svg)](https://scrapy.org/)

@@ -1,9 +1,9 @@
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent
 
-DATA_DIR = PROJECT_ROOT / "Data"
+DATA_DIR = PROJECT_ROOT / "data"
 
 RAW_DIR = DATA_DIR / "raw"
 EMB_DIR = DATA_DIR / "embeddings"
@@ -19,6 +19,7 @@ def ensure_dirs():
 
 
 SENTENCE_MODEL = "all-MiniLM-L6-v2"
+
 TOPIC_VERBOSE = True
 TOPIC_NGRAM_RANGE = (1, 3)
 TOPIC_MIN_DF = 10

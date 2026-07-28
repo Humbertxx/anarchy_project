@@ -38,8 +38,6 @@ SessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
-
-
 class Base(DeclarativeBase):
 
     def get_db() -> Generator[Session, None, None]:

@@ -40,22 +40,16 @@ def apply_chunk_processing(sql_query):
    
     for row in df.itertuples():
         temp_chunk = to_chunks(row.text)
-        for idx, chunk in enumerate(temp_chunk):\
+        for idx, chunk in enumerate(temp_chunk):
             chunk_row = {
                 "article_id": row.id,
+                "title": row.title,
                 "idx": idx,
                 "chunk_text": chunk,
             }
-    chunks_accumulator.append(chunk_row)
+            chunks_accumulator.append(chunk_row)
     chunks_df = pd.DataFrame(chunks_accumulator)
         
-    return chunks_df
+    return chunks_df.convert_dtypes(dtype_backend="pyarrow")
 
-def apply_article_agg(embed_df: pd.DataFrame) -> pd.DataFrame:
-    if not embed_df:
-        raise ValueError("DataFrame of files need to be define")
 
-    doc = embed_df.groupby("article_id")["embedding"].apply(lambda x: np.mean(x.tolist(), axis=0))
-    
-    return doc
-    

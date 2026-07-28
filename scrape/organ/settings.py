@@ -61,7 +61,7 @@ DOWNLOADER_MIDDLEWARES = {
 FEED_EXPORTERS = {'parquet': 'scrape.organ.exporters.ParquetItemExporter'}
 
 FEEDS = {
-    str(RAW_DIR / "shard_%(batch_id)05d.pq"): {
+    str(RAW_DIR / "shard_%(batch_id)03d.pq"): {
         "format": "parquet",
         "overwrite": True,
     }
