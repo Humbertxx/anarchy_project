@@ -3,6 +3,15 @@ from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 from scrape.organ.spiders.doc_spider import AnarchySpider
 
+
+
+
+def main():
+    print("starting crawl")
+    Scraper().run_spiders()
+    print("finished crawl")
+    
+    
 class Scraper:
     def __init__(self):
         settings_file_path = 'scrape.organ.settings' # The path seen from root, ie. from main.py
@@ -13,3 +22,5 @@ class Scraper:
     def run_spiders(self):
         self.process.crawl(self.spider)
         self.process.start()  # the script will block here until the crawling is finished
+
+
