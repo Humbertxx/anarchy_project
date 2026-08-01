@@ -29,7 +29,7 @@ from pipeline.loaders import (
 )
 
 
-def main() -> bool:
+def main() -> None:
     """Run the embedding stage using centralized configuration."""
     ensure_dirs()
     shard_paths = embed_parquet_shards(CLEANED_DIR, CHUNK_EMBEDDINGS_DIR)
@@ -38,8 +38,6 @@ def main() -> bool:
     write_article_embeddings(articles, ARTICLE_EMBEDDINGS_PATH)
     
     print(f"embedded {len(shard_paths)} shard(s) into {len(articles)} article vectors")
-    
-    return True
 
 def _missing_columns(frame: pd.DataFrame, required: Iterable[str]) -> list[str]:
     return sorted(set(required).difference(frame.columns))

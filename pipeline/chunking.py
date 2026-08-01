@@ -1,10 +1,38 @@
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-import pandas as pd
-import duckdb
 from pathlib import Path
-from config import CHUNK_OVERLAP, CHUNK_SIZE, CHUNK_COLUMNS
+
+import duckdb
+import pandas as pd
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from config import CHUNK_COLUMNS, CHUNK_OVERLAP, CHUNK_SIZE, CLEANED_DIR, RAW_DIR, ensure_dirs
 
 
+def main() -> None:
+    """Transform each raw article shard into a matching chunk shard."""
+    from pipeline.loaders import discover_parquet_files, validate_chunk_frame
+
+    ensure_dirs()
+    written = []
+    chunk_count = 0
+
+    for input_path in discover_parquet_files(RAW_DIR):
+        articles = load_parquet_shards(input_path)
+        chunks = apply_chunk_processing(
+            articles.loc[:, ["article_id", "title", "text"]]
+        )
+        validate_chunk_frame(chunks)
+
+        output_path = CLEANED_DIR / input_path.name
+        for suffix in (".pq", ".parquet"):
+            stale_path = output_path.with_suffix(suffix)
+            if stale_path != output_path and stale_path.exists():
+                stale_path.unlink()
+
+        chunks.to_parquet(output_path, index=False)
+        written.append(output_path)
+        chunk_count += len(chunks)
+
+    print(f"chunked {len(written)} shard(s) into {chunk_count} chunks under {CLEANED_DIR}")
 
 def to_chunks(txt: str) -> list[str]:
     """Split text into overlapping chunks suitable for embedding."""
@@ -72,3 +100,8 @@ def apply_chunk_processing(source: pd.DataFrame) -> pd.DataFrame:
 
     chunks_df = pd.DataFrame(chunks_accumulator, columns=CHUNK_COLUMNS)
     return chunks_df.convert_dtypes(dtype_backend="pyarrow")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+

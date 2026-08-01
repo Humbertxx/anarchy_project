@@ -24,14 +24,13 @@ from pipeline.loaders import discover_parquet_files, load_tone_classifier
 TONE_HYPOTHESIS_TEMPLATE = "This text has a {} tone."
 
 
-def main() -> int:
+def main() -> None:
     """Run tone scoring using centralized configuration."""
     ensure_dirs()
     classifier = load_tone_classifier()
     scores = score_tone_shards(RAW_DIR, classifier)
     write_tone_scores(scores)
     print(f"scored tone for {len(scores)} articles")
-    return 0
 
 
 def validate_tone_articles(frame: pd.DataFrame) -> None:
