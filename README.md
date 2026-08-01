@@ -48,23 +48,24 @@ The corpus is updated **monthly** via incremental scrapes, with the topic model 
 
 ## Build Status
 
-This README documents the **complete designed architecture**. The repository currently contains the working NLP core; the API, database, and frontend layers are designed but not yet implemented. The split below is honest — recruiters and reviewers can see exactly where the work is.
+This README documents the **complete designed architecture**. The repository currently contains the tested offline NLP stages; full-corpus GPU execution, the API, database, and frontend layers are still pending. The split below is honest — recruiters and reviewers can see exactly where the work is.
 
 ### Built (working code in the repo today)
 
 | Component                          | File                                     | Status                                                 |
 | ---------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
-| Scrapy spider for Anarchy Library  | `main.py` + `organ/`                     | Working                                                |
-| Chunking pipeline (LangChain + DuckDB + Parquet shards) | `allsentiment/processingFile.py` | Working                                  |
-| BERTopic topic modeling (MiniLM + CountVectorizer + ngrams) | `allsentiment/TopicCategory.py` | Working on subset; full-corpus run pending |
-| Cross-Encoder relevance with spaCy sentence windowing | `allsentiment/BestWay.py` | Working on subset; needs refactor for serving |
+| Scrapy spider for Anarchy Library  | `main.py` + `scrape/organ/`              | Working                                                |
+| Chunking pipeline (LangChain + DuckDB + Parquet shards) | `pipeline/chunking.py` | Working and unit-tested                  |
+| Chunk + article embedding pipeline | `pipeline/embed.py`                      | Sharded GPU inference and mean pooling implemented     |
+| BERTopic topic modeling (PCA + cuML + ngrams) | `pipeline/topic.py`             | GPU pipeline implemented; full-corpus run pending      |
+| Four-score zero-shot tone pipeline | `pipeline/tone.py`                       | GPU pipeline implemented; full-corpus run pending      |
+| Cross-Encoder relevance with spaCy sentence windowing | `research/BestWay.py` | Working on subset; needs refactor for serving |
 | Centralized config                 | `config.py`                              | Working                                                |
 
 ### Planned (designed in this README, not yet implemented)
 
 | Component                          | Where it'll live                         | Notes                                                  |
 | ---------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
-| Tone / sentiment scoring (4 axes)  | `pipeline/tone.py`                       | Academic / militant / hopeful / critical axes          |
 | PostgreSQL serving layer + pgvector | `migrations/`, `api/models.py`          | Chunks, embeddings, topics, tones, tags                |
 | FastAPI service with `/quote`      | `api/`                                   | Two-stage retrieval (pgvector → bge-reranker)          |
 | Reader frontend                    | `frontend/index.html`                    | Vanilla JS + Tailwind CDN, single page                 |
@@ -169,7 +170,7 @@ sequenceDiagram
 | Pre-reduction    | **scikit-learn PCA** (384d → 50d)                       | Cheap pre-reduction before UMAP — further halves UMAP runtime at no measurable quality cost.           |
 | NLP — sentence split | **spaCy** (`en_core_web_sm`)                        | Better than naive splitters for paragraph-level prose. Used at query time, not in pipeline.    |
 | NLP — reranking  | **`BAAI/bge-reranker-base`** (Cross-Encoder)            | Best-in-class quality among small open rerankers. ~280M params; 2-5s CPU latency per query.    |
-| NLP — sentiment  | **`transformers`** + 4-axis tone classifier             | Academic / militant / hopeful / critical scores added on top of topic clusters.                |
+| NLP — sentiment  | **`transformers`** + DeBERTa zero-shot classification    | Independent academic / militant / hopeful / critical scores, aggregated from token windows.    |
 | Dim. reduction   | **UMAP** via cuML (inside BERTopic)                     | GPU-accelerated UMAP; preserves global structure better than t-SNE.                            |
 | Clustering       | **HDBSCAN** via cuML (`min_cluster_size=50`)            | GPU-accelerated variable-density clusters; noise points stay labeled `-1`.                     |
 | Serving storage  | **PostgreSQL 15+** with **pgvector**                    | Hot layer: chunk embeddings (IVFFlat / HNSW), topic assignments, tones, tags, materialized views. |
@@ -233,17 +234,17 @@ anarchy_project/
 ├── design/                  # Figma exports / wireframe screenshots
 ├── data/                    # Pipeline artifacts (gitignored), organized by stage:
 │   ├── raw/                 #   Scrapy output (shard_*.pq Parquet files — the cold lake)
-│   ├── cleaned/             #   Normalized text
-│   ├── embeddings/          #   MiniLM vectors (intermediate; final home is pgvector)
-│   ├── topic/               #   BERTopic outputs (saved model, assignments, probs)
+│   ├── cleaned/             #   Chunk Parquet shards
+│   ├── embeddings/          #   Chunk shards + mean-pooled article vectors
+│   ├── topics/              #   BERTopic outputs (saved model, assignments, probs)
 │   ├── tone/                #   Sentiment / stance scores
 │   └── exports/             #   Final CSV / Parquet for offline Tableau / PowerBI use
 ├── migrations/              # Alembic migrations (Postgres schema + matview DDL)
-├── tests/
+├── test/
 ├── docker-compose.yml       # Postgres + API in one command (local dev)
 ├── railway.toml             # Railway deployment config
-├── requirements.txt
 ├── pyproject.toml
+├── uv.lock
 ├── .gitignore
 └── README.md
 ```
@@ -299,7 +300,7 @@ flowchart TD
 
 ### 1. Crawling
 
-`main.py` runs a Scrapy spider named `anarchy` (defined in `organ/`). The spider writes scraped articles as **Parquet shards** (`shard_*.pq`) to `data/raw/`. Each record contains `url`, `title`, `author`, `published_at`(if any provided), `body`, and `tags` (the human-curated tags pulled from each article's metadata).
+`main.py` runs a Scrapy spider named `anarchy` (defined in `scrape/organ/`). The spider writes scraped articles as **Parquet shards** (`shard_*.pq`) to `data/raw/`. Each record contains `article_id`, `url`, `title`, `author`, `published_at` (if provided), `text`, and `tags` (the human-curated tags pulled from each article's metadata).
 
 The corpus is ~45,000 articles with extreme size variance — from 10-line broadsides to entire books like *Thus Spoke Zarathustra*.
 
@@ -315,7 +316,7 @@ text_splitter = RecursiveCharacterTextSplitter(
 )
 ```
 
-DuckDB reads the Parquet shards directly. The output is ~1.5M chunks across the full corpus. Chunks are stored in Postgres with their article ID, position, text, and (after the embed step) their MiniLM vector.
+DuckDB reads the Parquet shards directly. The output is ~1.5M chunks across the full corpus, with `article_id`, `title`, `idx`, and `chunk_text` as the handoff contract. PostgreSQL loading is a later stage.
 
 **Why chunk at all if topic modeling is per-article?** Three different granularities serve three different needs in this project:
 
@@ -325,7 +326,7 @@ DuckDB reads the Parquet shards directly. The output is ~1.5M chunks across the 
 
 ### 3. Chunk Embedding (`pipeline/embed.py`)
 
-Each chunk is embedded with `sentence-transformers/all-MiniLM-L6-v2` (384-dim) on GPU via Runpod. Embeddings are written to `data/embeddings/*.parquet` first, then ingested into Postgres `chunks.embedding` (pgvector column with IVFFlat index).
+Each chunk is embedded with `sentence-transformers/all-MiniLM-L6-v2` (384-dim) on GPU via Runpod. Input Parquet files are processed one shard at a time and written to `data/embeddings/chunks/*.parquet`; mean-pooled article vectors are written to `data/embeddings/articles.parquet`. PostgreSQL ingestion is intentionally deferred to `pipeline/load_db.py`.
 
 **Expected runtime on a Runpod A100:** ~1 hour for 1.5M chunks. This is the longest single step of the pipeline.
 
@@ -375,7 +376,7 @@ topic_model = BERTopic(
 )
 
 topics, probs = topic_model.fit_transform(article_summaries, doc_embeddings_reduced)
-topic_model.save("data/topic/model", serialization="safetensors")
+topic_model.save("data/topics/model", serialization="safetensors")
 ```
 
 Each article gets:
@@ -388,14 +389,14 @@ Topic IDs land on `articles.topic_id` in Postgres. Chunks themselves don't carry
 
 ### 5. Tone & Stance Overlay (`pipeline/tone.py`)
 
-A separate classifier scores each article along four axes:
+A configurable zero-shot classifier (`MoritzLaurer/deberta-v3-base-zeroshot-v1.1-all-33` by default) produces four independent scores per article:
 
-- **Academic ↔ informal** — citation-heavy, neutral register vs. rhetorical, polemical register
-- **Militant ↔ pacifist** — calls to direct action vs. nonviolent framing
-- **Hopeful ↔ critical** — emphasis on what can be built vs. what must be torn down
-- **Persuasive ↔ analytical** — appeals to emotion / values vs. structured argumentation
+- `academic`
+- `militant`
+- `hopeful`
+- `critical`
 
-Scores are stored per article and aggregated per topic via materialized views. The result: *"Topic 4 is mostly mutual-aid writing with hopeful + academic tone, while Topic 7 covers similar topics with markedly more militant rhetoric."*
+Long articles are split into tokenizer-sized windows. Window scores are weighted by token count and aggregated into one row per article in `data/tone/scores.parquet`. Database materialized-view aggregation remains part of the later load stage.
 
 ### 6. Two-stage Quote Retrieval (runtime, `api/services/`)
 
@@ -845,9 +846,13 @@ Acceptable for a portfolio demo. If 3 seconds is too slow once real users try it
 git clone https://github.com/Humbertxx/anarchy_project.git
 cd anarchy_project
 
-python -m venv .venv
-source .venv/bin/activate           # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+uv sync
+```
+
+On a Linux Runpod host with a compatible NVIDIA CUDA image, install the RAPIDS GPU extra:
+
+```bash
+uv sync --extra gpu
 ```
 
 ### 2. Spin up PostgreSQL
@@ -892,30 +897,20 @@ This runs the `anarchy` Scrapy spider and dumps raw articles into `data/`.
 
 ### Run the offline NLP pipeline (on GPU / Runpod)
 
+The completed chunking API produces Parquet shards with `article_id`, `title`, `idx`, and `chunk_text` under `data/cleaned/`. Run each subsequent stage only after the preceding artifact has been verified:
+
 ```bash
-python -m pipeline.chunking    # LangChain chunks → data/cleaned/
-python -m pipeline.embed       # MiniLM embeddings → data/embeddings/ + Postgres
-python -m pipeline.topic       # BERTopic fit → data/topic/ + topic assignments in Postgres
-python -m pipeline.tone        # 4-axis tone scores → tone_scores table
-python -m pipeline.load_db     # Final Postgres writes (chunks, articles, tags)
+uv run python -m pipeline.embed  # → data/embeddings/chunks/ + articles.parquet
+uv run python -m pipeline.topic  # → data/topics/model + assignments.parquet
+uv run python -m pipeline.tone   # → data/tone/scores.parquet
 ```
 
-Or run the whole sequence end-to-end:
+Runtime paths, models, batch sizes, and devices are centralized in `config.py`. Database loading, end-to-end orchestration, monthly updates, and quarterly topic-ID reconciliation are deferred.
+
+Local tests mock model inference and do not require CUDA. On Runpod, opt into the real GPU smoke tests:
 
 ```bash
-python -m pipeline             # __main__.py orchestrates all stages
-```
-
-For monthly incremental updates (existing topic model, only new articles):
-
-```bash
-python -m pipeline.update      # diff → chunk new → embed new → BERTopic.transform → load
-```
-
-For the quarterly BERTopic refit:
-
-```bash
-python -m pipeline.topic --refit
+RUN_GPU_TESTS=1 uv run pytest -m gpu
 ```
 
 ### Start the API

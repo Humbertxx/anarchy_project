@@ -1,55 +1,74 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-import numpy as np
 import pandas as pd
 import duckdb
 from pathlib import Path
+from config import CHUNK_OVERLAP, CHUNK_SIZE, CHUNK_COLUMNS
 
-## Text chunk, chunk size, separators, and overlap is define in the chunk, returns a list
-def to_chunks(txt : str) -> list[str]:
+
+
+def to_chunks(txt: str) -> list[str]:
+    """Split text into overlapping chunks suitable for embedding."""
     text = str(txt)
     text_splitter = RecursiveCharacterTextSplitter(
-        separators =[" ", ""],
-        chunk_size = 800,
-        chunk_overlap = 160,
-        )
+        separators=[" ", ""],
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+    )
     return text_splitter.split_text(text)
 
-# SQL processing of files
+
 def load_parquet_shards(file_dir: Path) -> pd.DataFrame:
-    if not file_dir:
-        raise ValueError("directory of files need to be define")
-    conn = duckdb.connect()
+    """Load non-empty articles from a Parquet file, glob, or directory."""
+    if file_dir is None or not str(file_dir).strip():
+        raise ValueError("a Parquet file or directory must be defined")
+
+    source = Path(file_dir)
     
-    sql_query = conn.execute(f"""
-        SELECT *, filename,
-        FROM read_parquet('{file_dir}')
-        WHERE text IS NOT NULL AND text <> 0;
-        """
+    if source.is_dir():
+        parquet_files = sorted(
+            path for pattern in ("*.pq", "*.parquet") for path in source.glob(pattern)
         )
+        if not parquet_files:
+            raise FileNotFoundError(f"no Parquet shards found in {source}")
+
+        parquet_source: str | list[str] = [str(path) for path in parquet_files]
     
-    return sql_query
-    
-## apply to dataframe the function to chunk
-def apply_chunk_processing(sql_query):
-    df = sql_query.df()
-    
-    if df is None:
-        raise ValueError("need to be valid directory")
-    
+    else:
+        parquet_source = str(source)
+
+    with duckdb.connect() as conn:
+        return conn.execute(
+            """
+            SELECT *
+            FROM read_parquet(?, filename = true)
+            WHERE text IS NOT NULL AND trim(CAST(text AS VARCHAR)) <> ''
+            """,
+            [parquet_source],
+        ).df()
+
+
+def apply_chunk_processing(source: pd.DataFrame) -> pd.DataFrame:
+    """Expand article rows into one row per text chunk."""
+    df = source
+
+    required_columns = {"article_id", "title", "text"}
+    missing_columns = required_columns.difference(df.columns)
+    if missing_columns:
+        missing = ", ".join(sorted(missing_columns))
+        raise ValueError(f"missing required columns: {missing}")
+
     chunks_accumulator = []
-   
-    for row in df.itertuples():
+
+    for row in df.itertuples(index=False):
         temp_chunk = to_chunks(row.text)
         for idx, chunk in enumerate(temp_chunk):
             chunk_row = {
-                "article_id": row.id,
+                "article_id": row.article_id,
                 "title": row.title,
                 "idx": idx,
                 "chunk_text": chunk,
             }
             chunks_accumulator.append(chunk_row)
-    chunks_df = pd.DataFrame(chunks_accumulator)
-        
+
+    chunks_df = pd.DataFrame(chunks_accumulator, columns=CHUNK_COLUMNS)
     return chunks_df.convert_dtypes(dtype_backend="pyarrow")
-
-
