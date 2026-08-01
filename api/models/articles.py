@@ -1,26 +1,77 @@
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey,TIMESTAMP, ARRAY, Integer
-from sqlalchemy.dialects.postgresql import JSONB
+"""Article ORM model."""
+
+from __future__ import annotations
+
 from datetime import date, datetime
+
+from sqlalchemy import (
+    Computed,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.db import Base
 
 
 class Article(Base):
     __tablename__ = "articles"
-    id:               Mapped[int] = mapped_column(primary_key=True)
-    url:              Mapped[str] = mapped_column(unique=True)
-    title:            Mapped[str | None]
-    author:           Mapped[str | None]
-    published_at:     Mapped[date | None]
-    body:             Mapped[str | None]              # full text (for reconstruction at query time)
-    topic_id:         Mapped[int | None] = mapped_column(ForeignKey("topics.id"))
-    topic_prob:       Mapped[float | None]            # confidence of primary topic assignment
-    secondary_topics: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
-    
-    metadata_:    Mapped[dict | None] = mapped_column("metadata", JSONB)
-    created_at:   Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
 
-    topic:    Mapped["Topic | None"] = relationship()
-    tags:     Mapped[list["Tag"]] = relationship(secondary="article_tags")
-    chunk: Mapped[list["Chunk"]] = relationship(back_populates="article", cascade="all, delete-orphan")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    url: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str | None] = mapped_column(Text)
+    author: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[date | None] = mapped_column(Date)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    body_tsv: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('english'::regconfig, coalesce(body, ''::text))",
+            persisted=True,
+        ),
+    )
+    topic_id: Mapped[int | None] = mapped_column(
+        ForeignKey("topics.id", ondelete="SET NULL")
+    )
+    topic_prob: Mapped[float | None] = mapped_column(Float)
+    secondary_topics: Mapped[list[dict[str, int | float]] | None] = mapped_column(
+        JSONB
+    )
+    metadata_: Mapped[dict[str, object] | None] = mapped_column("metadata", JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    topic: Mapped["Topic | None"] = relationship(back_populates="articles")
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary="article_tags",
+        back_populates="articles",
+    )
+    chunks: Mapped[list["Chunk"]] = relationship(
+        back_populates="article",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    tone_score: Mapped["ToneScore | None"] = relationship(
+        back_populates="article",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
+
+    __table_args__ = (
+        Index("ix_articles_content_hash", "content_hash"),
+        Index("ix_articles_topic_id", "topic_id"),
+        Index("ix_articles_body_tsv", "body_tsv", postgresql_using="gin"),
+    )

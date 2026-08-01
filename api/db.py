@@ -1,48 +1,68 @@
+"""Synchronous SQLAlchemy engine and session lifecycle."""
+
+from __future__ import annotations
+
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
-from sqlalchemy.pool import NullPool
+from collections.abc import Generator
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-engine = create_engine(DATABASE_URL)
+class DatabaseConfigurationError(RuntimeError):
+    """Raised when database access is requested without valid configuration."""
 
-DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "1"))
-DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "0"))
-DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "10"))
+class Base(DeclarativeBase):
+    """Shared declarative base for every ORM model."""
 
-if IS_SERVERLESS:
-    # On serverless runtimes, avoid long-lived connection pools per function instance.
-    engine = create_engine(
-        DATABASE_URL,
-        future=True,
-        pool_pre_ping=True,
-        poolclass=NullPool,
-        connect_args=CONNECT_ARGS,
-    )
-else:
-    engine = create_engine(
-        DATABASE_URL,
-        future=True,
-        pool_pre_ping=True,
-        pool_size=DB_POOL_SIZE,
-        max_overflow=DB_MAX_OVERFLOW,
-        pool_timeout=DB_POOL_TIMEOUT,
-        connect_args=CONNECT_ARGS,
-    )
-    
 SessionLocal = sessionmaker(
-    autocommit=False,
     autoflush=False,
-    bind=engine,
     expire_on_commit=False,
 )
 
-class Base(DeclarativeBase):
+_engine: Engine | None = None
+_engine_url: str | None = None
 
-    def get_db() -> Generator[Session, None, None]:
-        db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
+def get_database_url(database_url: str | None = None) -> str:
+    """Return an explicit or environment-provided PostgreSQL URL."""
+    resolved_url = database_url or os.getenv("DATABASE_URL")
+    if not resolved_url:
+        raise DatabaseConfigurationError(
+            "DATABASE_URL must be defined before database access"
+        )
+    return resolved_url
+
+def get_engine(database_url: str | None = None) -> Engine:
+    """Create and cache the process-wide engine on first database access."""
+    global _engine, _engine_url
+
+    resolved_url = get_database_url(database_url)
+    if _engine is not None:
+        if resolved_url != _engine_url:
+            raise DatabaseConfigurationError(
+                "the database engine is already configured with a different URL"
+            )
+        return _engine
+
+    _engine = create_engine(
+        resolved_url,
+        pool_pre_ping=True,
+        pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "5")),
+        pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+    )
+    _engine_url = resolved_url
+    SessionLocal.configure(bind=_engine)
+    return _engine
+
+def get_session() -> Session:
+    """Create a session bound to the lazily configured engine."""
+    get_engine()
+    return SessionLocal()
+
+def get_db() -> Generator[Session, None, None]:
+    """Yield one session and always close it after use."""
+    session = get_session()
+    try:
+        yield session
+    finally:
+        session.close()
