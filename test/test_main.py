@@ -31,7 +31,7 @@ def test_pipeline_command_forwards_resume_stage(monkeypatch):
 
     result = main.main(["pipeline", "--from", "embed"])
 
-    assert result == 0
+    assert result is None
     assert calls == ["embed"]
 
 
@@ -42,7 +42,7 @@ def test_all_command_crawls_before_pipeline(monkeypatch):
 
     result = main.main(["all"])
 
-    assert result == 0
+    assert result is None
     assert calls == ["crawl", "pipeline"]
 
 

@@ -99,3 +99,4 @@ RETRIEVAL_CANDIDATES = 50  # ANN candidates fetched before reranking
 # IVFFlat lists=1000 in the migration; ~sqrt(lists) is the usual probes default.
 IVFFLAT_PROBES = 32
 RERANK_BATCH_SIZE = 16  # CPU-friendly cross-encoder batch
+RERANK_MAX_WINDOWS = 200  # global cap on (query, window) pairs scored per request

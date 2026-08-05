@@ -5,7 +5,11 @@ import pandas as pd
 import pytest
 
 from config import TOPIC_ASSIGNMENT_COLUMNS
-from pipeline.loaders import load_topic_artifacts
+from pipeline.loaders import (
+    load_topic_artifacts,
+    validate_article_embeddings,
+    validate_topic_documents,
+)
 from pipeline.topic import (
     align_topic_inputs,
     build_topic_assignments,
@@ -60,6 +64,21 @@ def article_embedding_frame() -> pd.DataFrame:
             {"article_id": 1, "title": "One", "embedding": [3.0, 4.0, 5.0]},
         ]
     )
+
+
+def test_validate_article_embeddings_requires_integer_article_ids():
+    frame = article_embedding_frame()
+    frame["article_id"] = frame["article_id"].astype(float)
+
+    with pytest.raises(ValueError, match="article_id must use an integer dtype"):
+        validate_article_embeddings(frame, expected_dimension=3)
+
+
+def test_validate_topic_documents_requires_integer_article_ids():
+    frame = pd.DataFrame([{"article_id": "1", "text": "first"}])
+
+    with pytest.raises(ValueError, match="article_id must use an integer dtype"):
+        validate_topic_documents(frame)
 
 
 def test_align_topic_inputs_preserves_embedding_order():

@@ -56,7 +56,7 @@ class AnarchySpider(scrapy.Spider):
             "author": (response.css("h3#text-author ::text").get() or "").strip(),
             "published_at": "".join([p_date.strip() for p_date in response.css("div#textdate::text").getall() if p_date.strip()]),
             "tags": [tag.strip() for tag in response.css("a.text-topics-item ::text").getall() if tag.strip()],
-            "text": "\n".join(text.strip() for text in response.css("div#thework ::text").getall() if text.strip()),
+            "text": " ".join(text.strip() for text in response.css("div#thework ::text").getall() if text.strip()),
         }
 
         yield article

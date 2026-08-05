@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from database import get_db
+from api.db import get_db
 
 
-from schemas.articles import (
+from api.schemas.articles import (
     TagOut,
     SentenceOut,
     TopicRef,
@@ -14,7 +14,7 @@ from schemas.articles import (
 
 router = APIRouter(prefix="/articles", tags=["article"])
 
-@route.get("")
+@router.get("")
 def get_my_article(
     db: Session = Depends(get_db)
 ):

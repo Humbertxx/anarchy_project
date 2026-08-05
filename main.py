@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pipeline.run import PIPELINE_STAGES
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None) -> None:
     """Run the command selected by the user."""
     args = build_parser().parse_args(argv)
 
@@ -26,8 +26,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         run_crawl()
         run_pipeline()
-
-    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -73,8 +73,8 @@ def align_topic_inputs(
 
     embedding_ids = set(article_embeddings["article_id"])
     article_ids = set(articles["article_id"])
-    missing_text = sorted(embedding_ids.difference(article_ids), key=str)
-    missing_embeddings = sorted(article_ids.difference(embedding_ids), key=str)
+    missing_text = sorted(embedding_ids.difference(article_ids))
+    missing_embeddings = sorted(article_ids.difference(embedding_ids))
    
     if missing_text or missing_embeddings:
         details = []

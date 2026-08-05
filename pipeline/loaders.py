@@ -9,6 +9,7 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_integer_dtype
 
 from config import (
     ARTICLE_EMBEDDING_COLUMNS,
@@ -30,6 +31,11 @@ from pipeline.chunking import load_parquet_shards
 
 def _missing_columns(frame: pd.DataFrame, required: Iterable[str]) -> list[str]:
     return sorted(set(required).difference(frame.columns))
+
+
+def _validate_integer_article_ids(frame: pd.DataFrame) -> None:
+    if not is_integer_dtype(frame["article_id"].dtype):
+        raise ValueError("article_id must use an integer dtype")
 
 
 def discover_parquet_files(source: str | Path) -> list[Path]:
@@ -92,6 +98,7 @@ def validate_article_embeddings(
     missing = sorted(set(ARTICLE_EMBEDDING_COLUMNS).difference(frame.columns))
     if missing:
         raise ValueError(f"missing article embedding columns: {', '.join(missing)}")
+    _validate_integer_article_ids(frame)
     if frame["article_id"].isnull().any():
         raise ValueError("article_id cannot be null")
     if frame["article_id"].duplicated().any():
@@ -126,6 +133,7 @@ def validate_topic_documents(frame: pd.DataFrame) -> None:
     missing = sorted({"article_id", "text"}.difference(frame.columns))
     if missing:
         raise ValueError(f"missing article text columns: {', '.join(missing)}")
+    _validate_integer_article_ids(frame)
     if frame[["article_id", "text"]].isnull().any().any():
         raise ValueError("article_id and text cannot be null")
     if frame["article_id"].duplicated().any():
