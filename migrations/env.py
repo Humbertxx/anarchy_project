@@ -10,6 +10,11 @@ from alembic import context
 from api.db import Base
 import api.models  # noqa: F401
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 config = context.config
 
 if config.config_file_name is not None:

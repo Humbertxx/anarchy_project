@@ -51,7 +51,7 @@ def upgrade() -> None:
 
     op.create_table(
         "articles",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("url", sa.Text(), nullable=False),
         sa.Column("content_hash", sa.String(length=64), nullable=False),
         sa.Column("title", sa.Text(), nullable=True),
@@ -112,7 +112,7 @@ def upgrade() -> None:
 
     op.create_table(
         "tags",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("name"),
@@ -137,7 +137,7 @@ def upgrade() -> None:
 
     op.create_table(
         "chunks",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), sa.Identity(), nullable=False),
         sa.Column("article_id", sa.Integer(), nullable=False),
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),
@@ -201,7 +201,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop application tables in reverse dependency order."""
+    """Drop application tables in reverse dependency order.
+
+    This is the mirror of ``upgrade()``, not the same sequence. Child tables
+    (chunks, tone_scores, article_tags) reference parents (articles, tags,
+    topics), so Postgres rejects drops until dependents are removed first.
+    Tests also call ``alembic downgrade base`` before ``upgrade head`` to reset
+    a shared test database; that reset pattern is separate from this ordering.
+    """
     op.drop_table("tone_scores")
     op.drop_index("ix_chunks_embedding_cosine", table_name="chunks")
     op.drop_index("ix_chunks_article_id", table_name="chunks")

@@ -17,8 +17,16 @@ class OrganPipeline:
         text = re.sub(r"[ \t]+", " ", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
         return "\n".join(line.strip() for line in text.split("\n")).strip()
-            
     
+    def normalize_text(self, title: str) -> str:
+        if not title:
+            return ""
+        
+        title = title.partition("|")[0]
+        title = title.strip()
+        
+        return title 
+        
     def normalize_date(self, date_value: str) -> str: 
         if not date_value:
             return ""

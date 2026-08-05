@@ -1,0 +1,52 @@
+[
+  {
+    "query": "liberty tested on labour",
+    "expected_url": "https://theanarchistlibrary.org/library/kingsley-widmer-on-refusing",
+    "notes": "On Refusing — liberty must be tested on the labour and vitality of the body"
+  },
+  {
+    "query": "obligation of public refusal anti-war rally",
+    "expected_url": "https://theanarchistlibrary.org/library/kingsley-widmer-on-refusing",
+    "notes": "On Refusing — opening scene at a Southern California park rally"
+  },
+  {
+    "query": "30 year sentence for anarchist zines in possession",
+    "expected_url": "https://theanarchistlibrary.org/library/dominic-black-federalism-and-revolution",
+    "notes": "Federalism and Revolution — Prairieland trial, Daniel Sanchez Estrada"
+  },
+  {
+    "query": "hunting the anarchist movement not just antifascists",
+    "expected_url": "https://theanarchistlibrary.org/library/dominic-black-federalism-and-revolution",
+    "notes": "Federalism and Revolution — repression targets radical egalitarianism itself"
+  },
+  {
+    "query": "channeled anger builds a fighting organization",
+    "expected_url": "https://theanarchistlibrary.org/library/1199-advice-to-rookie-organizers",
+    "notes": "1199's Advice — channel anger, don't defuse it"
+  },
+  {
+    "query": "workers are made of clay not glass",
+    "expected_url": "https://theanarchistlibrary.org/library/1199-advice-to-rookie-organizers",
+    "notes": "1199's Advice — union organizing aphorism"
+  },
+  {
+    "query": "mutual aid and cooperative self-help predominate",
+    "expected_url": "https://theanarchistlibrary.org/library/stuart-white-the-incremental-anarchist",
+    "notes": "The Incremental Anarchist — Colin Ward's pluralist definition of anarchy"
+  },
+  {
+    "query": "if you want to build a free society the parts are at hand",
+    "expected_url": "https://theanarchistlibrary.org/library/stuart-white-the-incremental-anarchist",
+    "notes": "The Incremental Anarchist — Ward on anarchy already present in society"
+  },
+  {
+    "query": "encrypted drive seized by authoritarian authority",
+    "expected_url": "https://theanarchistlibrary.org/library/the-techno-anarchist-encrypted-arch-linux-on-sata-to-usb",
+    "notes": "Encrypted Arch Linux — guide goal when drive is physically seized"
+  },
+  {
+    "query": "LUKS full disk encryption portable USB drive",
+    "expected_url": "https://theanarchistlibrary.org/library/the-techno-anarchist-encrypted-arch-linux-on-sata-to-usb",
+    "notes": "Encrypted Arch Linux — technical setup for offline brute-force resistance"
+  }
+]

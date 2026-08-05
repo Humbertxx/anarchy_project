@@ -40,7 +40,7 @@ def ensure_dirs() -> None:
 SENTENCE_MODEL = "all-MiniLM-L6-v2"
 EMBEDDING_BATCH_SIZE = 256
 EMBEDDING_DIMENSION = 384
-EMBEDDING_DEVICE = "cuda"
+EMBEDDING_DEVICE = "mps"
 
 
 # Topic modeling (BERTopic pipeline)
@@ -66,6 +66,20 @@ TOPIC_ASSIGNMENT_COLUMNS = [
     "topic_prob",
     "secondary_topics",
 ]
+RAW_ARTICLE_COLUMNS = [
+    "article_id",
+    "url",
+    "title",
+    "author",
+    "published_at",
+    "text",
+    "tags",
+]
+
+
+# Database loading (Parquet to PostgreSQL)
+LOAD_ARTICLE_BATCH_SIZE = 500
+LOAD_CHUNK_BATCH_SIZE = 2000
 
 
 # Tone classification
@@ -75,3 +89,13 @@ TONE_BATCH_SIZE = 16
 TONE_WINDOW_TOKENS = 384
 TONE_LABELS = ("academic", "militant", "hopeful", "critical")
 TONE_COLUMNS = ["article_id", *TONE_LABELS]
+
+
+# API retrieval and reranking (CPU-only)
+API_EMBEDDING_MODEL = SENTENCE_MODEL  # must match the 384-dim chunk index
+API_DEVICE = "cpu"
+RERANKER_MODEL = "BAAI/bge-reranker-base"
+RETRIEVAL_CANDIDATES = 50  # ANN candidates fetched before reranking
+# IVFFlat lists=1000 in the migration; ~sqrt(lists) is the usual probes default.
+IVFFLAT_PROBES = 32
+RERANK_BATCH_SIZE = 16  # CPU-friendly cross-encoder batch

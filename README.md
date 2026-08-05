@@ -890,22 +890,36 @@ alembic upgrade head
 ### Crawl the library
 
 ```bash
-python main.py
+uv run python main.py crawl
 ```
 
 This runs the `anarchy` Scrapy spider and dumps raw articles into `data/`.
 
 ### Run the offline NLP pipeline (on GPU / Runpod)
 
-The completed chunking API produces Parquet shards with `article_id`, `title`, `idx`, and `chunk_text` under `data/cleaned/`. Run each subsequent stage only after the preceding artifact has been verified:
+After transferring `data/raw/` to the GPU machine, run the ordered workshop:
 
 ```bash
-uv run python -m pipeline.embed  # → data/embeddings/chunks/ + articles.parquet
-uv run python -m pipeline.topic  # → data/topics/model + assignments.parquet
-uv run python -m pipeline.tone   # → data/tone/scores.parquet
+uv run python main.py pipeline
 ```
 
-Runtime paths, models, batch sizes, and devices are centralized in `config.py`. Database loading, end-to-end orchestration, monthly updates, and quarterly topic-ID reconciliation are deferred.
+This runs chunking, embedding, topic fitting, tone scoring, and PostgreSQL
+loading in their required order. Resume a failed workshop from an existing
+artifact boundary with, for example:
+
+```bash
+uv run python main.py pipeline --from embed
+```
+
+For development or a small corpus on one machine, crawl and then run the
+pipeline with:
+
+```bash
+uv run python main.py all
+```
+
+Runtime paths, models, batch sizes, and devices are centralized in `config.py`.
+Monthly updates and quarterly topic-ID reconciliation are deferred.
 
 Local tests mock model inference and do not require CUDA. On Runpod, opt into the real GPU smoke tests:
 

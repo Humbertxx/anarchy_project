@@ -75,6 +75,7 @@ def align_topic_inputs(
     article_ids = set(articles["article_id"])
     missing_text = sorted(embedding_ids.difference(article_ids), key=str)
     missing_embeddings = sorted(article_ids.difference(embedding_ids), key=str)
+   
     if missing_text or missing_embeddings:
         details = []
         if missing_text:
@@ -190,9 +191,11 @@ def build_topic_assignments(
     """Build primary and top-three secondary article topic assignments."""
     topic_array = np.asarray(topics)
     probability_array = np.asarray(probabilities, dtype=np.float64)
+    
     if topic_array.shape != (len(article_ids),):
         raise ValueError("topics must contain one value per article")
     expected_probability_shape = (len(article_ids), len(probability_topic_ids))
+    
     if probability_array.shape != expected_probability_shape:
         raise ValueError(
             f"probabilities have shape {probability_array.shape}; "
@@ -203,11 +206,9 @@ def build_topic_assignments(
     if ((probability_array < 0) | (probability_array > 1)).any():
         raise ValueError("topic probabilities must be between zero and one")
 
-    column_by_topic = {
-        topic_id: column
-        for column, topic_id in enumerate(probability_topic_ids)
-    }
+    column_by_topic = {topic_id: column for column, topic_id in enumerate(probability_topic_ids)}
     rows = []
+    
     for article_id, primary_topic, row_probabilities in zip(
         article_ids,
         topic_array,
