@@ -17,5 +17,6 @@ __pycache__/
 *.log
 !env.example
 outputs/
+outputs_test/
 
 

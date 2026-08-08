@@ -30,10 +30,10 @@
 
 ## Overview
 
-The Anarchy Library hosts ~45,000 articles, essays, and pamphlets covering anarchist thought across history — ranging from 10-line broadsides to entire books like *Thus Spoke Zarathustra*. This project treats that library as a corpus and answers two questions:
+The Anarchy Library hosts ~17,000 articles, essays, and pamphlets covering anarchist thought across history — ranging from 10-line broadsides to entire books like *Thus Spoke Zarathustra*. This project treats that library as a corpus and answers two questions:
 
 - **What are people writing about?** — Surfaced via **BERTopic**, an end-to-end neural topic modeling framework that combines BERT embeddings, UMAP, HDBSCAN, and class-based TF-IDF (c-TF-IDF) for cluster labeling.
-- **What's the *most relevant quote* for a given query?** — Surfaced via a two-stage retrieval pipeline: pgvector cosine shortlist over ~1.5M chunk embeddings, then **BAAI/bge-reranker-base** scoring of sentence-level passages.
+- **What's the *most relevant quote* for a given query?** — Surfaced via a two-stage retrieval pipeline: pgvector cosine shortlist over ~3M chunk embeddings, then **BAAI/bge-reranker-base** scoring of sentence-level passages.
 
 A third layer applies sentiment / tone analysis on top of the topics, so the project doesn't just report *what* is being discussed, but *how* — academic, polemical, militant, hopeful — across each thematic cluster.
 
@@ -54,7 +54,7 @@ This README documents the **complete designed architecture**. The repository cur
 
 | Component                          | File                                     | Status                                                 |
 | ---------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
-| Scrapy spider for Anarchy Library  | `main.py` + `scrape/organ/`              | Working                                                |
+| Scrapy spider for Anarchy Library  | `main.py` + `scrape/organ/`              | Working (sitemap.txt seed, ~17K URLs)                  |
 | Chunking pipeline (LangChain + DuckDB + Parquet shards) | `pipeline/chunking.py` | Working and unit-tested                  |
 | Chunk + article embedding pipeline | `pipeline/embed.py`                      | Sharded GPU inference and mean pooling implemented     |
 | BERTopic topic modeling (PCA + cuML + ngrams) | `pipeline/topic.py`             | GPU pipeline implemented; full-corpus run pending      |
@@ -85,8 +85,8 @@ flowchart LR
     A["🕷️ Scrapy Spider<br/>(anarchy)"] --> B[("📦 Parquet Lake<br/>data/raw/shard_*.pq")]
     B --> C["🧠 NLP Pipeline<br/>(GPU on Runpod)"]
     C --> C1["LangChain Chunking<br/>800/160 overlap"]
-    C1 --> C2A["Chunk Embeddings<br/>(1.5M × 384d)<br/>→ retrieval track"]
-    C1 --> C2B["Mean-pool per article<br/>(45K × 384d)<br/>→ topic track"]
+    C1 --> C2A["Chunk Embeddings<br/>(~3M × 384d)<br/>→ retrieval track"]
+    C1 --> C2B["Mean-pool per article<br/>(~17K × 384d)<br/>→ topic track"]
     C2B --> C3["BERTopic w/ cuML<br/>(UMAP + HDBSCAN<br/>+ c-TF-IDF ngrams)"]
     C --> C4["Tone Classification<br/>(4-axis, per article)"]
     C2A --> D[("🐘 PostgreSQL + pgvector<br/>chunks (retrieval) +<br/>articles.topic_id (topics)<br/>+ tones, tags")]
@@ -122,8 +122,8 @@ flowchart LR
 
 **Why this shape?**
 
-- **Two embedding tracks for two different needs.** Chunk embeddings (1.5M × 384d) power *retrieval* via pgvector cosine shortlist. Article-level embeddings (45K × 384d, mean-pooled from chunks) power *topic modeling* — a 30x reduction in BERTopic's input size with no signal loss for the per-article question.
-- **GPU-accelerated topic modeling.** With cuML's UMAP and HDBSCAN, the topic fit on 45K document embeddings completes in ~10 minutes on an A10G instead of multi-hour CPU runtime.
+- **Two embedding tracks for two different needs.** Chunk embeddings (~3M × 384d) power *retrieval* via pgvector cosine shortlist. Article-level embeddings (~17K × 384d, mean-pooled from chunks) power *topic modeling* — a large reduction in BERTopic's input size with no signal loss for the per-article question.
+- **GPU-accelerated topic modeling.** With cuML's UMAP and HDBSCAN, the topic fit on ~17K document embeddings completes in ~10 minutes on an A10G instead of multi-hour CPU runtime.
 - **Parquet is the cold lake, Postgres is the hot layer.** Raw article text stays in Parquet (cheap, immutable, can be re-derived). Chunks, embeddings, topic assignments, and tone scores live in Postgres (queryable, vector-indexable, BI-connectable).
 - **The Cross-Encoder is online but bounded.** A pgvector cosine shortlist trims candidates to ~50 chunks per query before bge-reranker-base runs. Reranking is expensive but happens over a small set.
 - **Two cadences:** monthly incremental updates use BERTopic's `transform()` to assign existing topics to new articles. Quarterly refits use `fit_transform()` to discover emerging topics.
@@ -162,7 +162,7 @@ sequenceDiagram
 | Layer            | Tool                                                    | Why                                                                                            |
 | ---------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Scraping         | **Scrapy**                                              | Used in `main.py` via `CrawlerProcess`. Robust polite crawling, easy item pipelines.           |
-| Raw storage      | **Parquet** shards + **DuckDB**                         | Cheap append-only lake for ~45K articles. DuckDB queries shards directly without a DB server.  |
+| Raw storage      | **Parquet** shards + **DuckDB**                         | Cheap append-only lake for ~17K articles. DuckDB queries shards directly without a DB server.  |
 | Chunking         | **LangChain** `RecursiveCharacterTextSplitter`          | 800-char chunks with 160-char overlap. Stable, well-tested.                                    |
 | NLP — embeddings | **`sentence-transformers`** (`all-MiniLM-L6-v2`)        | 384-dim, fast on GPU, runs ~1.5M chunks in ~1 hour on a single A100.                           |
 | NLP — topics     | **BERTopic** + **CountVectorizer** (ngrams 1-3, min_df=10) | Fitted on **45K document embeddings** (mean-pooled from chunks), not on chunks directly — 30x speedup with no signal loss. Trigram c-TF-IDF labels. |
@@ -272,9 +272,9 @@ This pipeline is built around a **two-track design**: topic modeling runs at the
 
 ```mermaid
 flowchart TD
-    A["📰 Raw Articles<br/>(Parquet shards, ~45K)"] --> B["✂️ LangChain Chunking<br/>800 chars / 160 overlap"]
-    B --> C["🔤 MiniLM Embeddings<br/>(1.5M chunks, GPU)"]
-    B --> D["🧮 Mean-pool per article<br/>(45K doc embeddings)"]
+    A["📰 Raw Articles<br/>(Parquet shards, ~17K)"] --> B["✂️ LangChain Chunking<br/>800 chars / 160 overlap"]
+    B --> C["🔤 MiniLM Embeddings<br/>(~3M chunks, GPU)"]
+    B --> D["🧮 Mean-pool per article<br/>(~17K doc embeddings)"]
     D --> E["🧪 BERTopic<br/>(cuML UMAP + HDBSCAN<br/>+ trigram c-TF-IDF)"]
     E --> F["🏷️ One topic per article<br/>+ top-3 secondary topics"]
     A --> G["🎭 Tone Classifier<br/>4 axes (per article)"]
@@ -300,9 +300,9 @@ flowchart TD
 
 ### 1. Crawling
 
-`main.py` runs a Scrapy spider named `anarchy` (defined in `scrape/organ/`). The spider writes scraped articles as **Parquet shards** (`shard_*.pq`) to `data/raw/`. Each record contains `article_id`, `url`, `title`, `author`, `published_at` (if provided), `text`, and `tags` (the human-curated tags pulled from each article's metadata).
+`main.py crawl` runs a Scrapy spider named `anarchy` (defined in `scrape/organ/`). The spider seeds from the site's canonical [`sitemap.txt`](https://theanarchistlibrary.org/sitemap.txt) (listed in `robots.txt`), filters to `/library/` article URLs (~16,700 texts), and fetches each page. It writes scraped articles as **Parquet shards** (`shard_*.pq`, 2,500 records per shard) to `data/raw/`. Each record contains `article_id`, `url`, `title`, `author`, `published_at` (if provided), `text`, and `tags` (the human-curated tags pulled from each article's metadata).
 
-The corpus is ~45,000 articles with extreme size variance — from 10-line broadsides to entire books like *Thus Spoke Zarathustra*.
+The live catalog is ~17,000 articles with extreme size variance — from 10-line broadsides to entire books like *Thus Spoke Zarathustra*. A full crawl takes several hours depending on throttle settings and network conditions.
 
 ### 2. Chunking (`pipeline/chunking.py`)
 
@@ -316,7 +316,7 @@ text_splitter = RecursiveCharacterTextSplitter(
 )
 ```
 
-DuckDB reads the Parquet shards directly. The output is ~1.5M chunks across the full corpus, with `article_id`, `title`, `idx`, and `chunk_text` as the handoff contract. PostgreSQL loading is a later stage.
+DuckDB reads the Parquet shards directly. The output is ~3M chunks across the full corpus, with `article_id`, `title`, `idx`, and `chunk_text` as the handoff contract. PostgreSQL loading is a later stage.
 
 **Why chunk at all if topic modeling is per-article?** Three different granularities serve three different needs in this project:
 
@@ -344,10 +344,10 @@ doc_embeddings = (
     chunks_df.groupby("article_id")["embedding"]
     .apply(lambda vecs: np.mean(np.stack(vecs), axis=0))
 )
-# Result: 45K × 384 array (one embedding per article)
+# Result: ~17K × 384 array (one embedding per article)
 ```
 
-Then BERTopic fits on these 45K document embeddings — a **30x reduction in input size** compared to fitting on 1.5M chunks. With cuML's GPU-accelerated UMAP and HDBSCAN, the fit completes in **5-10 minutes on an A10G** instead of the multi-hour runtime chunk-level fitting would require:
+Then BERTopic fits on these ~17K document embeddings — a large reduction in input size compared to fitting on millions of chunks. With cuML's GPU-accelerated UMAP and HDBSCAN, the fit completes in **5-10 minutes on an A10G** instead of the multi-hour runtime chunk-level fitting would require:
 
 ```python
 from bertopic import BERTopic
@@ -893,7 +893,13 @@ alembic upgrade head
 uv run python main.py crawl
 ```
 
-This runs the `anarchy` Scrapy spider and dumps raw articles into `data/`.
+This runs the `anarchy` Scrapy spider: it downloads `sitemap.txt`, queues every `/library/` article URL (~16,700), and writes Parquet shards to `data/raw/`. Monitor progress in the terminal or via shard count:
+
+```bash
+ls data/raw/shard_*.pq | wc -l    # ~7 shards at 2,500 articles each
+```
+
+Expect several hours for a full crawl. Scrapy settings in `scrape/organ/settings.py` enable `ROBOTSTXT_OBEY` and AutoThrottle.
 
 ### Run the offline NLP pipeline (on GPU / Runpod)
 
@@ -958,7 +964,7 @@ This brings up Postgres, runs migrations, executes the pipeline if the DB is emp
 
 ## Results
 
-*This section will be filled in after the full-corpus pipeline runs. Current status: the chunking, BERTopic, and Cross-Encoder code in `allsentiment/` has been validated on a subset of the corpus. The full-corpus pass (45,000 articles → ~1.5M chunks) is pending the migration to the layout described above.*
+*Full-corpus scrape and pipeline runs are in progress. The chunking, BERTopic, tone, and API layers are implemented in-repo; a complete pass (~17,000 articles → ~3M chunks) populates `data/` and PostgreSQL for production retrieval.*
 
 Expected findings, based on subset runs and corpus structure:
 
