@@ -8,13 +8,14 @@ aggregates there, so the API never needs to load the model at serve time.
 from __future__ import annotations
 
 from sqlalchemy import Select, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from api.models import Topic
+from api.models import Article, Topic
 
 
 DEFAULT_TOPIC_LIMIT = 50
 MAX_TOPIC_LIMIT = 200
+DEFAULT_SAMPLE_ARTICLE_LIMIT = 5
 
 # BERTopic labels unclustered documents -1. The row is a real topic in the
 # table but not a theme anyone chose, so it stays out of listings by default.
@@ -70,3 +71,30 @@ def get_topic(session: Session, topic_id: int) -> Topic:
     if topic is None:
         raise LookupError(f"no topic with id {topic_id}")
     return topic
+
+
+def get_topic_detail(
+    session: Session,
+    topic_id: int,
+    *,
+    sample_limit: int = DEFAULT_SAMPLE_ARTICLE_LIMIT,
+) -> tuple[Topic, list[Article]]:
+    """Return one topic plus a few sample articles for the topic context panel.
+
+    Raises:
+        LookupError: when no topic carries that id.
+        ValueError: when sample_limit is not positive.
+    """
+    if sample_limit <= 0:
+        raise ValueError("sample_limit must be greater than zero")
+
+    topic = get_topic(session, topic_id)
+    statement = (
+        select(Article)
+        .where(Article.topic_id == topic_id)
+        .options(selectinload(Article.tags))
+        .order_by(Article.topic_prob.desc().nullslast(), Article.id)
+        .limit(sample_limit)
+    )
+    samples = list(session.execute(statement).scalars().all())
+    return topic, samples

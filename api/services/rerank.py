@@ -65,6 +65,7 @@ class _ScoredWindow:
     article_url: str
     author: str | None
     published_at: Any
+    topic_id: int | None
 
 
 def _longest_overlap(left: str, right: str, max_length: int) -> int:
@@ -328,6 +329,7 @@ def rerank_candidates(
             article_url=meta.article_url,
             author=meta.author,
             published_at=meta.published_at,
+            topic_id=meta.topic_id,
         )
         for (article_id, window_index, window_count, window, chunk_position, meta), score in zip(
             pending, scores, strict=True
@@ -356,6 +358,7 @@ def rerank_candidates(
                 article_url=item.article_url,
                 author=item.author,
                 published_at=item.published_at,
+                topic_id=item.topic_id,
             )
         )
         if len(hits) >= limit:

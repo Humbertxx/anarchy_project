@@ -5,11 +5,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from api.db import get_db
+from api.schemas.articles import ArticleListItem
 from api.schemas.topics import TopicDetail, TopicSummary
 from api.services.topic_lookup import (
     DEFAULT_TOPIC_LIMIT,
     MAX_TOPIC_LIMIT,
-    get_topic,
+    get_topic_detail,
     list_topics,
 )
 
@@ -45,9 +46,9 @@ def read_topic(
     topic_id: int,
     session: Annotated[Session, Depends(get_db)],
 ) -> TopicDetail:
-    """Return one topic with its c-TF-IDF terms and tone distribution."""
+    """Return one topic with terms, tone distribution, and sample articles."""
     try:
-        topic = get_topic(session, topic_id)
+        topic, samples = get_topic_detail(session, topic_id)
     except LookupError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -59,4 +60,11 @@ def read_topic(
             detail="topic lookup is temporarily unavailable",
         ) from exc
 
-    return TopicDetail.model_validate(topic)
+    detail = TopicDetail.model_validate(topic)
+    return detail.model_copy(
+        update={
+            "sample_articles": [
+                ArticleListItem.model_validate(article) for article in samples
+            ]
+        }
+    )

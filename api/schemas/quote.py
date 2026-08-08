@@ -23,6 +23,7 @@ class QuoteHit(BaseModel):
     article_url: str
     author: str | None = None
     published_at: date | None = None
+    topic_id: int | None = None
 
 class QuoteSearchResponse(BaseModel):
     query: str

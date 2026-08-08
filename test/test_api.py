@@ -10,8 +10,11 @@ from api.db import DatabaseConfigurationError, get_db
 from api.app import app
 from api.routers import articles as articles_router
 from api.routers import quote as quote_router
+from api.routers import stats as stats_router
+from api.routers import tags as tags_router
 from api.routers import topics as topics_router
 from api.schemas.quote import QuoteHit
+from api.schemas.stats import CorpusStats, TagFrequency, ToneAverages, TopicSize
 from api.services.retrieval import ChunkCandidate
 
 
@@ -65,6 +68,7 @@ def test_quote_search_forwards_filters_and_limit(
         article_url="https://example.test/on-power",
         author="A. Writer",
         published_at=date(2020, 1, 2),
+        topic_id=7,
     )
     calls: dict[str, Any] = {}
 
@@ -118,6 +122,7 @@ def test_quote_search_forwards_filters_and_limit(
                 "article_url": "https://example.test/on-power",
                 "author": "A. Writer",
                 "published_at": "2020-01-02",
+                "topic_id": 7,
             }
         ],
     }
@@ -297,19 +302,29 @@ def test_read_topic_returns_detail(
     client, session = api_client
     calls: dict[str, Any] = {}
 
-    def fake_get(received_session: object, topic_id: int) -> FakeTopic:
+    def fake_get(received_session: object, topic_id: int) -> tuple[FakeTopic, list[FakeArticle]]:
         calls["get"] = (received_session, topic_id)
-        return FakeTopic(
-            3,
-            label="mutual aid",
-            size=120,
-            dominant_tone="hopeful",
-            top_terms=["mutual aid", "solidarity"],
-            tone_distribution={"hopeful": 0.6, "militant": 0.4},
-            parent_topic_id=1,
+        return (
+            FakeTopic(
+                3,
+                label="mutual aid",
+                size=120,
+                dominant_tone="hopeful",
+                top_terms=["mutual aid", "solidarity"],
+                tone_distribution={"hopeful": 0.6, "militant": 0.4},
+                parent_topic_id=1,
+            ),
+            [
+                FakeArticle(
+                    20,
+                    url="https://example.test/on-power",
+                    title="On Power",
+                    tags=[FakeTag(2, "power")],
+                )
+            ],
         )
 
-    monkeypatch.setattr(topics_router, "get_topic", fake_get)
+    monkeypatch.setattr(topics_router, "get_topic_detail", fake_get)
 
     response = client.get("/topics/3")
 
@@ -323,6 +338,18 @@ def test_read_topic_returns_detail(
         "top_terms": ["mutual aid", "solidarity"],
         "tone_distribution": {"hopeful": 0.6, "militant": 0.4},
         "parent_topic_id": 1,
+        "sample_articles": [
+            {
+                "id": 20,
+                "url": "https://example.test/on-power",
+                "title": "On Power",
+                "author": "A. Writer",
+                "published_at": "2020-01-02",
+                "topic_id": 3,
+                "topic_prob": 0.9,
+                "tags": [{"id": 2, "name": "power"}],
+            }
+        ],
     }
 
 
@@ -333,8 +360,8 @@ def test_read_topic_reads_null_top_terms_as_empty(
     client, _session = api_client
     monkeypatch.setattr(
         topics_router,
-        "get_topic",
-        lambda *_args, **_kwargs: FakeTopic(3, label="unlabelled"),
+        "get_topic_detail",
+        lambda *_args, **_kwargs: (FakeTopic(3, label="unlabelled"), []),
     )
 
     response = client.get("/topics/3")
@@ -342,6 +369,7 @@ def test_read_topic_reads_null_top_terms_as_empty(
     assert response.status_code == 200
     assert response.json()["top_terms"] == []
     assert response.json()["tone_distribution"] is None
+    assert response.json()["sample_articles"] == []
 
 
 def test_read_topic_maps_missing_topic_to_not_found(
@@ -350,10 +378,10 @@ def test_read_topic_maps_missing_topic_to_not_found(
 ) -> None:
     client, _session = api_client
 
-    def missing(*_args: object, **_kwargs: object) -> FakeTopic:
+    def missing(*_args: object, **_kwargs: object) -> tuple[FakeTopic, list[FakeArticle]]:
         raise LookupError("no topic with id 999")
 
-    monkeypatch.setattr(topics_router, "get_topic", missing)
+    monkeypatch.setattr(topics_router, "get_topic_detail", missing)
 
     response = client.get("/topics/999")
 
@@ -446,10 +474,11 @@ def test_read_articles_forwards_filters_and_paging(
         *,
         topic_id: int | None,
         tag: str | None,
+        q: str | None,
         limit: int,
         offset: int,
     ) -> list[FakeArticle]:
-        calls["list"] = (received_session, topic_id, tag, limit, offset)
+        calls["list"] = (received_session, topic_id, tag, q, limit, offset)
         return [
             FakeArticle(
                 20,
@@ -463,11 +492,17 @@ def test_read_articles_forwards_filters_and_paging(
 
     response = client.get(
         "/articles",
-        params={"topic_id": 7, "tag": "power", "limit": 10, "offset": 20},
+        params={
+            "topic_id": 7,
+            "tag": "power",
+            "q": "mutual aid",
+            "limit": 10,
+            "offset": 20,
+        },
     )
 
     assert response.status_code == 200
-    assert calls["list"] == (session, 7, "power", 10, 20)
+    assert calls["list"] == (session, 7, "power", "mutual aid", 10, 20)
     assert response.json() == [
         {
             "id": 20,
@@ -499,6 +534,7 @@ def test_read_articles_defaults_paging_and_filters(
     assert calls == {
         "topic_id": None,
         "tag": None,
+        "q": None,
         "limit": 50,
         "offset": 0,
     }
@@ -532,6 +568,17 @@ def test_read_articles_maps_value_error_to_bad_request(
 
     assert response.status_code == 400
     assert response.json() == {"detail": "limit must be greater than zero"}
+
+
+def test_read_articles_maps_blank_q_to_bad_request(
+    api_client: tuple[TestClient, object],
+) -> None:
+    client, _session = api_client
+
+    response = client.get("/articles", params={"q": "   "})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "q must not be blank"}
 
 
 def test_read_articles_maps_database_error_to_service_unavailable(
@@ -632,3 +679,98 @@ def test_read_article_maps_database_error_to_service_unavailable(
 
     assert response.status_code == 503
     assert response.json() == {"detail": "article lookup is temporarily unavailable"}
+
+
+def test_read_tags_returns_ordered_tags(
+    api_client: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, session = api_client
+    calls: dict[str, Any] = {}
+
+    def fake_list(received_session: object) -> list[FakeTag]:
+        calls["list"] = received_session
+        return [FakeTag(2, "power"), FakeTag(1, "mutual-aid")]
+
+    monkeypatch.setattr(tags_router, "list_tags", fake_list)
+
+    response = client.get("/tags")
+
+    assert response.status_code == 200
+    assert calls["list"] is session
+    assert response.json() == [
+        {"id": 2, "name": "power"},
+        {"id": 1, "name": "mutual-aid"},
+    ]
+
+
+def test_read_tags_maps_database_error_to_service_unavailable(
+    api_client: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _session = api_client
+
+    def failing(*_args: object, **_kwargs: object) -> list[FakeTag]:
+        raise SQLAlchemyError("database unavailable")
+
+    monkeypatch.setattr(tags_router, "list_tags", failing)
+
+    response = client.get("/tags")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "tag lookup is temporarily unavailable"}
+
+
+def test_read_stats_returns_corpus_aggregates(
+    api_client: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, session = api_client
+    calls: dict[str, Any] = {}
+
+    def fake_stats(received_session: object) -> CorpusStats:
+        calls["stats"] = received_session
+        return CorpusStats(
+            tag_frequencies=[TagFrequency(name="power", n=12)],
+            topic_sizes=[TopicSize(id=3, label="mutual aid", size=120)],
+            tone_averages=ToneAverages(
+                academic=0.1,
+                militant=0.2,
+                hopeful=0.7,
+                critical=0.4,
+            ),
+        )
+
+    monkeypatch.setattr(stats_router, "get_corpus_stats", fake_stats)
+
+    response = client.get("/stats")
+
+    assert response.status_code == 200
+    assert calls["stats"] is session
+    assert response.json() == {
+        "tag_frequencies": [{"name": "power", "n": 12}],
+        "topic_sizes": [{"id": 3, "label": "mutual aid", "size": 120}],
+        "tone_averages": {
+            "academic": 0.1,
+            "militant": 0.2,
+            "hopeful": 0.7,
+            "critical": 0.4,
+        },
+    }
+
+
+def test_read_stats_maps_database_error_to_service_unavailable(
+    api_client: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _session = api_client
+
+    def failing(*_args: object, **_kwargs: object) -> CorpusStats:
+        raise SQLAlchemyError("database unavailable")
+
+    monkeypatch.setattr(stats_router, "get_corpus_stats", failing)
+
+    response = client.get("/stats")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "stats lookup is temporarily unavailable"}

@@ -316,6 +316,7 @@ def test_rerank_orders_by_score_and_truncates(monkeypatch: pytest.MonkeyPatch):
     assert [hit.text for hit in hits] == [alpha, gamma]
     assert [hit.score for hit in hits] == [0.9, 0.5]
     assert [hit.article_id for hit in hits] == [1, 2]
+    assert [hit.topic_id for hit in hits] == [0, 0]
 
 
 def test_rerank_dedupes_overlapping_windows_from_same_article(

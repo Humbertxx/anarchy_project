@@ -3,7 +3,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from api.routers import articles, quote, topics
+from api.routers import articles, quote, stats, tags, topics
 
 from api.db import DatabaseConfigurationError
 
@@ -16,6 +16,8 @@ app = FastAPI(
 app.include_router(quote.router)
 app.include_router(topics.router)
 app.include_router(articles.router)
+app.include_router(tags.router)
+app.include_router(stats.router)
 
 
 @app.exception_handler(DatabaseConfigurationError)

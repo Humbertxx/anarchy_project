@@ -21,15 +21,17 @@ def read_articles(
     session: Annotated[Session, Depends(get_db)],
     topic_id: int | None = None,
     tag: str | None = None,
+    q: str | None = None,
     limit: Annotated[int, Query(ge=1, le=MAX_ARTICLE_LIMIT)] = DEFAULT_ARTICLE_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ArticleListItem]:
-    """List articles with optional topic and tag filters."""
+    """List articles with optional topic, tag, and full-text filters."""
     try:
         articles = list_articles(
             session,
             topic_id=topic_id,
             tag=tag,
+            q=q,
             limit=limit,
             offset=offset,
         )
