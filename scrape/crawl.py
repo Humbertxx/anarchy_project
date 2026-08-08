@@ -23,4 +23,3 @@ class Scraper:
         self.process.crawl(self.spider)
         self.process.start()  # the script will block here until the crawling is finished
 
-

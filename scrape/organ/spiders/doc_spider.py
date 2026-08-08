@@ -1,16 +1,20 @@
-import scrapy
-from scrape.organ.items import OrganItem
 import time
+
+import scrapy
 from scrapy import signals
 
+from scrape.organ.items import OrganItem
+
+SITEMAP_URL = "https://theanarchistlibrary.org/sitemap.txt"
+
+
 class AnarchySpider(scrapy.Spider):
-    name = "anarchy"  
-    start_urls = [f"https://theanarchistlibrary.org/latest/"]   
-    
+    name = "anarchy"
+    start_urls = [SITEMAP_URL]
+
     def __init__(self):
         self.item_id_counter = 0
-        self.page_num = 1             
-    
+
     @classmethod
     def from_crawler(cls, crawler, *args, **kwargs):
         spider = super().from_crawler(crawler, *args, **kwargs)
@@ -24,39 +28,45 @@ class AnarchySpider(scrapy.Spider):
     def spider_closed(self, spider, reason):
         elapsed = time.perf_counter() - self._t0
         self.logger.info(f"Spider finished in {elapsed:.2f} seconds. Reason: {reason}")
-   
+
     def parse(self, response):
-        entries = response.css("div.amw-listing-item")
-        for entry in entries:
-            link = entry.css("a::attr(href)").get()
-           
-            
-            if not link:
+        queued = 0
+        for line in response.text.splitlines():
+            url = line.strip()
+            if not self._is_article_url(url):
                 continue
-            
-            yield response.follow(
-                link, 
-                callback=self.final_content, 
-                #cb_kwargs={"listing_date": (link_date)},
-            )   
-        
-        next_page = f'{self.start_urls[0]}{self.page_num}'
-        if next_page and entries:
-            if self.page_num < 5:
-                self.page_num += 1
-                yield response.follow(next_page, callback=self.parse)
-            
-    def final_content(self, response): 
-        self.item_id_counter += 1 
+            queued += 1
+            yield scrapy.Request(url, callback=self.final_content)
+
+        self.logger.info("Queued %d article URLs from sitemap", queued)
+
+    @staticmethod
+    def _is_article_url(url: str) -> bool:
+        return "/library/" in url and not url.rstrip("/").endswith("/library")
+
+    def final_content(self, response):
+        self.item_id_counter += 1
 
         article: OrganItem = {
-            "article_id" : self.item_id_counter,
+            "article_id": self.item_id_counter,
             "url": response.url,
             "title": (response.css("title::text").get() or "").strip(),
             "author": (response.css("h3#text-author ::text").get() or "").strip(),
-            "published_at": "".join([p_date.strip() for p_date in response.css("div#textdate::text").getall() if p_date.strip()]),
-            "tags": [tag.strip() for tag in response.css("a.text-topics-item ::text").getall() if tag.strip()],
-            "text": " ".join(text.strip() for text in response.css("div#thework ::text").getall() if text.strip()),
+            "published_at": "".join(
+                p_date.strip()
+                for p_date in response.css("div#textdate::text").getall()
+                if p_date.strip()
+            ),
+            "tags": [
+                tag.strip()
+                for tag in response.css("a.text-topics-item ::text").getall()
+                if tag.strip()
+            ],
+            "text": " ".join(
+                text.strip()
+                for text in response.css("div#thework ::text").getall()
+                if text.strip()
+            ),
         }
 
         yield article
