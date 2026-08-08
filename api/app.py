@@ -14,8 +14,8 @@ app = FastAPI(
 
 
 app.include_router(quote.router)
-#app.include_router(articles.router)
-#app.include_router(topics.router)
+app.include_router(topics.router)
+app.include_router(articles.router)
 
 
 @app.exception_handler(DatabaseConfigurationError)

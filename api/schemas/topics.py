@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 class TopicSummary(BaseModel):
     id: int
@@ -11,3 +11,9 @@ class TopicDetail(TopicSummary):
     top_terms: list[str] = []
     tone_distribution: dict[str, float] | None = None
     parent_topic_id: int | None = None
+
+    @field_validator("top_terms", mode="before")
+    @classmethod
+    def default_missing_terms(cls, value: list[str] | None) -> list[str]:
+        """Read a NULL top_terms column as no terms rather than a failure."""
+        return [] if value is None else value

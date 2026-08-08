@@ -1,21 +1,27 @@
 from datetime import date, datetime
-from pydantic import BaseModel, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class TagOut(BaseModel):
     id: int
     name: str
     model_config = ConfigDict(from_attributes=True)
 
+
 class TopicRef(BaseModel):
     id: int
     label: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
-class SentenceOut(BaseModel):
-    id: int
-    position: int | None = None
-    text: str | None = None
+
+class ToneOut(BaseModel):
+    academic: float
+    militant: float
+    hopeful: float
+    critical: float
     model_config = ConfigDict(from_attributes=True)
+
 
 class ArticleListItem(BaseModel):
     id: int
@@ -28,9 +34,10 @@ class ArticleListItem(BaseModel):
     tags: list[TagOut] = []
     model_config = ConfigDict(from_attributes=True)
 
+
 class ArticleDetail(ArticleListItem):
     body: str | None = None
-    secondary_topics: float | None = None
+    secondary_topics: list[dict[str, int | float]] | None = None
     created_at: datetime
     topic: TopicRef | None = None
-    chunk: list[SentenceOut] = []
+    tone: ToneOut | None = Field(default=None, validation_alias="tone_score")
