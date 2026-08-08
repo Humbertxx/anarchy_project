@@ -1,0 +1,2 @@
+generic single database configuration file for Alembic.  This is used by the alembic command line tool, 
+and can be replaced with multiple files if you have multiple databases.
